@@ -32,10 +32,10 @@ jobs:
       # ----------------------------------------------------------------
       # 1. Checkout (full history so we can walk tags & commits)
       # ----------------------------------------------------------------
-      - name: Checkout master
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: master
+          ref: main
           fetch-depth: 0
           token: ${{ github.token }}
 
@@ -104,7 +104,7 @@ jobs:
           PREV_TAG:      ${{ steps.prev.outputs.previous_tag }}
           ACTOR:         ${{ github.actor }}
           SHA:           ${{ github.sha }}
-          BRANCH:        master
+          BRANCH:        main
           RUN_NUMBER:    ${{ github.run_number }}
           RUN_ID:        ${{ github.run_id }}
           REPO:          ${{ github.repository }}
