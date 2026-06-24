@@ -125,6 +125,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Debug Slack payload
+        shell: bash
+        env:
+          COMMIT_COUNT: ${{ steps.notes.outputs.commit_count }}
+          RELEASE_URL:  ${{ steps.notes.outputs.release_url }}
+        run: |
+          echo "COMMIT_COUNT: '$COMMIT_COUNT'"
+          echo "RELEASE_URL: '$RELEASE_URL'"
+
       # ----------------------------------------------------------------
       # 7. Send Slack notification
       # ----------------------------------------------------------------
