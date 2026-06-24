@@ -57,8 +57,8 @@ dist_section() {
     case "$LANE" in
       beta)
         lines+="* 🧪 **Internal Testing:** https://play.google.com/apps/internaltest/4701465847560328530"$'\n'
-        ;;
         lines+="* 🔗 **Play Console:** https://play.google.com/console/u/0/developers/5954935899608654188/app/4976344022028616551/tracks/internal-testing"$'\n'
+        ;;
       promote_to_production|production)
         lines+="* 🛍️ **Play Store:** https://play.google.com/store/apps/details?id=com.diarchgouser"$'\n'
         ;;
