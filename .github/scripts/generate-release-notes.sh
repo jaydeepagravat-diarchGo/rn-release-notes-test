@@ -169,7 +169,7 @@ ${COMMITS_BODY}
 | **Run Number** | #${RUN_NUMBER} |
 | **Run URL** | [View run](${WORKFLOW_URL}) |
 | **Triggered By** | @${ACTOR} |
-"
+
 
 # ── Write outputs ─────────────────────────────────────────────────────────────
 
