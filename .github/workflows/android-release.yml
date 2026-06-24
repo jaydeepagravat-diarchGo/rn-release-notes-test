@@ -1,0 +1,70 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "Release lane"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - promote_to_production
+          - production
+
+permissions:
+  contents: write
+
+jobs:
+  android-release:
+    name: "Android Release (${{ inputs.lane }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Announce run
+        run: |
+          echo "::notice title=Android Release::Running lane '${{ inputs.lane }}' triggered by ${{ github.actor }}"
+
+      # ── MOCK: replaces the real Fastlane build + upload ──────────────
+      # Delete this step and restore your Fastlane steps when going real.
+      - name: "[MOCK] Simulate Android build & upload"
+        run: |
+          echo "================================================"
+          echo "  MOCK: Android lane '${{ inputs.lane }}'"
+          echo "  Would run: bundle exec fastlane ${{ inputs.lane }}"
+          echo "  Simulating 3s build time..."
+          echo "================================================"
+          sleep 3
+          echo "✅ Mock build complete."
+
+      - name: Job summary
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            echo "### ✅ Android Release — \`${{ inputs.lane }}\` succeeded" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ❌ Android Release — \`${{ inputs.lane }}\` failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- **Triggered by:** ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Lane:** ${{ inputs.lane }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  post-release:
+    name: "Post-Release (Android)"
+    needs: android-release
+    if: success()
+    uses: ./.github/workflows/post-release.yml
+    with:
+      platform: android
+      lane: ${{ inputs.lane }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      GH_PAT: ${{ secrets.GH_PAT }}

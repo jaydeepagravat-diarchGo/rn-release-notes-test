@@ -1,0 +1,137 @@
+name: Post-Release (Tag · GitHub Release · Slack)
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string   # "android" | "ios"
+      lane:
+        required: true
+        type: string   # "beta" | "promote_to_production" | "production"
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
+      GH_PAT:
+        required: false
+
+jobs:
+  post-release:
+    name: "Post-Release (${{ inputs.platform }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. Checkout — full history required for git log diff
+      # ----------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      # ----------------------------------------------------------------
+      # 2. Extract version from source files (no manual input)
+      # ----------------------------------------------------------------
+      - name: Extract version info
+        id: version
+        shell: bash
+        run: bash .github/scripts/extract-version.sh "${{ inputs.platform }}"
+
+      # ----------------------------------------------------------------
+      # 3. Create & push Git tag (idempotent)
+      # ----------------------------------------------------------------
+      - name: Create Git tag
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping."
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "✅ Created and pushed tag: $TAG"
+          fi
+
+      # ----------------------------------------------------------------
+      # 4. Find previous platform tag for commit diff
+      # ----------------------------------------------------------------
+      - name: Resolve previous release tag
+        id: prev
+        shell: bash
+        run: |
+          PLATFORM="${{ inputs.platform }}"
+          CURRENT_TAG="${{ steps.version.outputs.tag }}"
+
+          # Appending '|| true' keeps the script from crashing if grep finds nothing
+          PREV=$(git tag --list "${PLATFORM}-v*" \
+            | grep -v "^${CURRENT_TAG}$" \
+            | sort -V \
+            | tail -1) || true
+
+          if [ -z "$PREV" ]; then
+            PREV=$(git rev-list --max-parents=0 HEAD)
+            echo "No previous tag — using initial commit: $PREV"
+          else
+            echo "Previous tag: $PREV"
+          fi
+
+          echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------------------------------------------
+      # 5. Generate release notes
+      # ----------------------------------------------------------------
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        env:
+          PLATFORM:      ${{ inputs.platform }}
+          LANE:          ${{ inputs.lane }}
+          TAG:           ${{ steps.version.outputs.tag }}
+          VERSION:       ${{ steps.version.outputs.version }}
+          BUILD:         ${{ steps.version.outputs.build }}
+          PREV_TAG:      ${{ steps.prev.outputs.previous_tag }}
+          ACTOR:         ${{ github.actor }}
+          SHA:           ${{ github.sha }}
+          BRANCH:        ${{ github.ref_name }}
+          RUN_NUMBER:    ${{ github.run_number }}
+          RUN_ID:        ${{ github.run_id }}
+          REPO:          ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+        run: bash .github/scripts/generate-release-notes.sh
+
+      # ----------------------------------------------------------------
+      # 6. Create / update GitHub Release
+      # ----------------------------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:   ${{ steps.version.outputs.tag }}
+          name:       ${{ steps.notes.outputs.release_title }}
+          body:       ${{ steps.notes.outputs.release_body }}
+          draft:      false
+          prerelease: ${{ inputs.lane == 'beta' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+
+      # ----------------------------------------------------------------
+      # 7. Slack notification
+      # ----------------------------------------------------------------
+      - name: Send Slack notification
+        shell: bash
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PLATFORM:          ${{ inputs.platform }}
+          LANE:              ${{ inputs.lane }}
+          TAG:               ${{ steps.version.outputs.tag }}
+          VERSION:           ${{ steps.version.outputs.version }}
+          BUILD:             ${{ steps.version.outputs.build }}
+          ACTOR:             ${{ github.actor }}
+          COMMIT_COUNT:      ${{ steps.notes.outputs.commit_count }}
+          RELEASE_URL:       ${{ steps.notes.outputs.release_url }}
+          RUN_ID:            ${{ github.run_id }}
+          REPO:              ${{ github.repository }}
+        run: bash .github/scripts/send-slack-notification.sh

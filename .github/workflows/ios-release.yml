@@ -1,0 +1,70 @@
+name: iOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "Release lane"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - promote_to_production
+          - production
+
+permissions:
+  contents: write
+
+jobs:
+  ios-release:
+    name: "iOS Release (${{ inputs.lane }})"
+    runs-on: ubuntu-latest  # ubuntu is fine for mock; switch to macos-15 for real Fastlane
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Announce run
+        run: |
+          echo "::notice title=iOS Release::Running lane '${{ inputs.lane }}' triggered by ${{ github.actor }}"
+
+      # ── MOCK: replaces the real Fastlane build + upload ──────────────
+      # Delete this step and restore your Fastlane steps when going real.
+      - name: "[MOCK] Simulate iOS build & upload"
+        run: |
+          echo "================================================"
+          echo "  MOCK: iOS lane '${{ inputs.lane }}'"
+          echo "  Would run: bundle exec fastlane ${{ inputs.lane }}"
+          echo "  Simulating 3s build time..."
+          echo "================================================"
+          sleep 3
+          echo "✅ Mock build complete."
+
+      - name: Job summary
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            echo "### ✅ iOS Release — \`${{ inputs.lane }}\` succeeded" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ❌ iOS Release — \`${{ inputs.lane }}\` failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- **Triggered by:** ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Lane:** ${{ inputs.lane }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  post-release:
+    name: "Post-Release (iOS)"
+    needs: ios-release
+    if: success()
+    uses: ./.github/workflows/post-release.yml
+    with:
+      platform: ios
+      lane: ${{ inputs.lane }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      GH_PAT: ${{ secrets.GH_PAT }}
