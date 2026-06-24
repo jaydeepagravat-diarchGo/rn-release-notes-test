@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # .github/scripts/generate-release-notes.sh
 #
-# Builds the GitHub Release title + body.
-# All values come from env vars injected by post-release.yml.
+# Builds the GitHub Release title and body from environment variables
+# populated by the calling workflow job.
+#
+# Required env vars (all injected by post-release.yml):
+#   PLATFORM, LANE, TAG, VERSION, BUILD, PREV_TAG
+#   ACTOR, SHA, BRANCH, RUN_NUMBER, RUN_ID, REPO, WORKFLOW_NAME
 #
 # Writes to $GITHUB_OUTPUT:
 #   release_title
-#   release_body    (multiline EOF block)
+#   release_body   (multiline, EOF-delimited)
 #   commit_count
-#   release_url
+#   release_url    (constructed — actual URL after release creation)
 
 set -euo pipefail
 
-# ── Label helpers ─────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 platform_label() {
   case "$PLATFORM" in
@@ -24,55 +28,57 @@ platform_label() {
 
 lane_label() {
   case "$LANE" in
-    beta)                  [[ "$PLATFORM" == "ios" ]] && echo "Beta / TestFlight" || echo "Beta / Internal Testing" ;;
+    beta)                 echo "Beta" ;;
     promote_to_production) echo "Production (promoted)" ;;
-    production)            echo "Production" ;;
-    *)                     echo "$LANE" ;;
+    production)           echo "Production" ;;
+    *)                    echo "$LANE" ;;
   esac
 }
 
-release_emoji() {
+release_type_emoji() {
   case "$LANE" in
-    beta)  echo "🧪" ;;
-    *)     echo "🚀" ;;
+    beta)                  echo "🧪" ;;
+    promote_to_production) echo "🚀" ;;
+    production)            echo "🚀" ;;
+    *)                     echo "📦" ;;
   esac
 }
 
 # ── Distribution links ────────────────────────────────────────────────────────
-# Replace YOUR_APP_ID and YOUR_TESTFLIGHT_TOKEN with your real values.
+
+# These are standard, non-repo-specific links. Replace the app IDs if needed,
+# or inject them as secrets/env vars for your specific app.
+#
+# We embed them only when the lane makes them relevant.
 
 dist_section() {
+  local lines=""
   if [[ "$PLATFORM" == "android" ]]; then
     case "$LANE" in
       beta)
-        echo "* 🧪 **Internal Testing:** https://play.google.com/apps/internaltest/YOUR_ANDROID_APP_ID"
+        lines+="* 🧪 **Internal Testing:** https://play.google.com/apps/internaltest/4701465847560328530"$'\n'
         ;;
+        lines+="* 🔗 **Play Console:** https://play.google.com/console/u/0/developers/5954935899608654188/app/4976344022028616551/tracks/internal-testing"$'\n'
       promote_to_production|production)
-        echo "* 🛍️ **Play Store:** https://play.google.com/store/apps/details?id=YOUR_ANDROID_APP_ID"
+        lines+="* 🛍️ **Play Store:** https://play.google.com/store/apps/details?id=com.diarchgouser"$'\n'
         ;;
     esac
   else
     case "$LANE" in
       beta)
-        echo "* 🧪 **TestFlight:** https://testflight.apple.com/join/YOUR_TESTFLIGHT_TOKEN"
-        echo "* 🔗 **App Store Connect:** https://appstoreconnect.apple.com/apps/YOUR_IOS_APP_ID/testflight/ios"
+        lines+="* 🧪 **TestFlight:** https://testflight.apple.com/join/YOUR_TESTFLIGHT_TOKEN"$'\n'
+        lines+="* 🔗 **App Store Connect:** https://appstoreconnect.apple.com/apps/YOUR_APP_ID/testflight/ios"$'\n'
         ;;
       promote_to_production|production)
-        echo "* 🛍️ **App Store:** https://apps.apple.com/app/idYOUR_IOS_APP_ID"
+        lines+="* 🛍️ **App Store:** https://apps.apple.com/us/app/diarchgo/id6753003161"$'\n'
         ;;
     esac
   fi
+  echo "$lines"
 }
 
-# ── Resolve the commit this release actually points to ────────────────────────
-# PROMOTION FIX:
-# A beta→production promotion ships the SAME build that the beta run produced.
-# The version/build in source is unchanged, so the tag (e.g. android-v1.0.4-4)
-# is identical and was ALREADY created during the beta run — it points at the
-# original build commit. By the time a promotion runs, HEAD may be several
-# commits ahead of that tag. Release notes must describe the build that actually
-# ships (the tagged commit), NOT whatever happens to be at HEAD now.
-#
+# ── Commit list ───────────────────────────────────────────────────────────────
+
 # For a brand-new beta/production release the tag was just created at HEAD in the
 # previous workflow step, so RELEASE_REF resolves to HEAD and behaviour is
 # unchanged. This branch only diverges for promotions — which is the point.
@@ -83,11 +89,11 @@ else
 fi
 RELEASE_SHA=$(git rev-parse "$RELEASE_REF")
 
-# ── Commit list ───────────────────────────────────────────────────────────────
-
+# Determine the range: previous tag (or root) → HEAD
 RANGE="${PREV_TAG}..${RELEASE_REF}"
-COMMIT_LOG=$(git log "$RANGE" --pretty=format:"%h|%an|%s" 2>/dev/null || true)
 
+# Collect commits: short sha | author | subject
+COMMIT_LOG=$(git log "$RANGE" --pretty=format:"%h|%an|%s" 2>/dev/null || true)
 COMMIT_COUNT=0
 COMMIT_LINES=""
 CONTRIBUTORS_RAW=""
@@ -100,38 +106,23 @@ if [[ -n "$COMMIT_LOG" ]]; then
   done <<< "$COMMIT_LOG"
 fi
 
-CONTRIBUTOR_COUNT=$(echo "$CONTRIBUTORS_RAW" | sort -u | grep -c . || echo "0")
+CONTRIBUTOR_COUNT=$(echo "$CONTRIBUTORS_RAW" | sort -u | grep -c . || true)
 
+# Attempt files-changed count (best effort — skip if slow/unavailable)
 FILES_CHANGED=""
-if git rev-parse "$PREV_TAG" &>/dev/null 2>&1; then
-  FILES_CHANGED=$(git diff --name-only "$PREV_TAG" "$RELEASE_REF" 2>/dev/null | wc -l | tr -d ' ' || true)
+if [[ -n "$PREV_TAG" ]] && git rev-parse "$PREV_TAG" &>/dev/null; then
+  FILES_CHANGED=$(git diff --name-only "$PREV_TAG" HEAD 2>/dev/null | wc -l | tr -d ' ' || true)
 fi
 
-# ── Assemble ──────────────────────────────────────────────────────────────────
+# ── Assemble release notes ────────────────────────────────────────────────────
 
 PLATFORM_LABEL=$(platform_label)
 LANE_LABEL=$(lane_label)
-EMOJI=$(release_emoji)
+EMOJI=$(release_type_emoji)
 RELEASE_DATE=$(TZ='Asia/Kolkata' date +"%Y-%m-%d %H:%M IST")
 SHORT_SHA="${RELEASE_SHA:0:8}"
 WORKFLOW_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
-RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
-
 RELEASE_TITLE="${EMOJI} ${PLATFORM_LABEL} Release v${VERSION} (${BUILD})"
-
-# Files-changed row (only shown when we have a value)
-FILES_ROW=""
-if [[ -n "$FILES_CHANGED" ]]; then
-  FILES_ROW="| **Files Changed** | ${FILES_CHANGED} |"
-fi
-
-# Commits section body
-if [[ "$COMMIT_COUNT" -eq 0 ]]; then
-  COMMITS_BODY="_No new commits since \`${PREV_TAG}\` — this is likely a promotion of an existing build._"
-else
-  COMMITS_BODY="$COMMIT_LINES"
-fi
-
 RELEASE_BODY="## Release Overview
 
 | Field | Value |
@@ -151,7 +142,6 @@ RELEASE_BODY="## Release Overview
 ## Distribution
 
 $(dist_section)
-
 ---
 
 ## Change Summary
@@ -160,7 +150,7 @@ $(dist_section)
 |---|---|
 | **Total Commits** | ${COMMIT_COUNT} |
 | **Contributors** | ${CONTRIBUTOR_COUNT} |
-${FILES_ROW}
+$([ -n "$FILES_CHANGED" ] && echo "| **Files Changed** | ${FILES_CHANGED} |")
 | **Comparing** | \`${PREV_TAG}\` → \`${TAG}\` |
 
 ---
@@ -183,13 +173,19 @@ ${COMMITS_BODY}
 
 # ── Write outputs ─────────────────────────────────────────────────────────────
 
+# Constructed release URL (softprops action will create the actual release).
+# We build the expected URL so the Slack notifier can reference it before
+# we have the real API response.
+RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
+
+# Multiline output requires EOF delimiter syntax.
 {
   echo "release_title=${RELEASE_TITLE}"
   echo "commit_count=${COMMIT_COUNT}"
   echo "release_url=${RELEASE_URL}"
   echo "release_body<<RELEASE_BODY_EOF"
-  printf '%s\n' "$RELEASE_BODY"
+  echo "$RELEASE_BODY"
   echo "RELEASE_BODY_EOF"
 } >> "$GITHUB_OUTPUT"
 
-echo "✅ Release notes generated — $COMMIT_COUNT commits in range [$RANGE]"
+echo "Release notes generated — $COMMIT_COUNT commits in range [$RANGE]"

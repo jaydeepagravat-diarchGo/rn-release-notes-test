@@ -1,5 +1,7 @@
-name: Post-Release (Tag · GitHub Release · Slack)
+name: Post-Release
 
+# Called by android-release.yml and ios-release.yml after a successful deploy.
+# Never triggered directly.
 on:
   workflow_call:
     inputs:
@@ -12,8 +14,6 @@ on:
     secrets:
       SLACK_WEBHOOK_URL:
         required: true
-      GH_PAT:
-        required: false
 
 jobs:
   post-release:
@@ -23,16 +23,17 @@ jobs:
 
     steps:
       # ----------------------------------------------------------------
-      # 1. Checkout — full history required for git log diff
+      # 1. Checkout (full history so we can walk tags & commits)
       # ----------------------------------------------------------------
-      - name: Checkout
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
+          ref: master
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT || github.token }}
+          token: ${{ github.token }}
 
       # ----------------------------------------------------------------
-      # 2. Extract version from source files (no manual input)
+      # 2. Extract version from source — no manual input
       # ----------------------------------------------------------------
       - name: Extract version info
         id: version
@@ -82,7 +83,7 @@ jobs:
           echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
 
       # ----------------------------------------------------------------
-      # 5. Generate release notes
+      # 5. Build release notes
       # ----------------------------------------------------------------
       - name: Generate release notes
         id: notes
@@ -96,7 +97,7 @@ jobs:
           PREV_TAG:      ${{ steps.prev.outputs.previous_tag }}
           ACTOR:         ${{ github.actor }}
           SHA:           ${{ github.sha }}
-          BRANCH:        ${{ github.ref_name }}
+          BRANCH:        master
           RUN_NUMBER:    ${{ github.run_number }}
           RUN_ID:        ${{ github.run_id }}
           REPO:          ${{ github.repository }}
@@ -104,7 +105,7 @@ jobs:
         run: bash .github/scripts/generate-release-notes.sh
 
       # ----------------------------------------------------------------
-      # 6. Create / update GitHub Release
+      # 6. Create (or update) GitHub Release
       # ----------------------------------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -113,12 +114,12 @@ jobs:
           name:       ${{ steps.notes.outputs.release_title }}
           body:       ${{ steps.notes.outputs.release_body }}
           draft:      false
-          prerelease: ${{ inputs.lane == 'beta' }}
+          prerelease: ${{ inputs.lane != 'production' && inputs.lane != 'promote_to_production' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       # ----------------------------------------------------------------
-      # 7. Slack notification
+      # 7. Send Slack notification
       # ----------------------------------------------------------------
       - name: Send Slack notification
         shell: bash
