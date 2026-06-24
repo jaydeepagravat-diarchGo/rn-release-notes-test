@@ -64,9 +64,28 @@ dist_section() {
   fi
 }
 
+# ── Resolve the commit this release actually points to ────────────────────────
+# PROMOTION FIX:
+# A beta→production promotion ships the SAME build that the beta run produced.
+# The version/build in source is unchanged, so the tag (e.g. android-v1.0.4-4)
+# is identical and was ALREADY created during the beta run — it points at the
+# original build commit. By the time a promotion runs, HEAD may be several
+# commits ahead of that tag. Release notes must describe the build that actually
+# ships (the tagged commit), NOT whatever happens to be at HEAD now.
+#
+# For a brand-new beta/production release the tag was just created at HEAD in the
+# previous workflow step, so RELEASE_REF resolves to HEAD and behaviour is
+# unchanged. This branch only diverges for promotions — which is the point.
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+  RELEASE_REF="refs/tags/${TAG}"
+else
+  RELEASE_REF="HEAD"
+fi
+RELEASE_SHA=$(git rev-parse "$RELEASE_REF")
+
 # ── Commit list ───────────────────────────────────────────────────────────────
 
-RANGE="${PREV_TAG}..HEAD"
+RANGE="${PREV_TAG}..${RELEASE_REF}"
 COMMIT_LOG=$(git log "$RANGE" --pretty=format:"%h|%an|%s" 2>/dev/null || true)
 
 COMMIT_COUNT=0
@@ -85,7 +104,7 @@ CONTRIBUTOR_COUNT=$(echo "$CONTRIBUTORS_RAW" | sort -u | grep -c . || echo "0")
 
 FILES_CHANGED=""
 if git rev-parse "$PREV_TAG" &>/dev/null 2>&1; then
-  FILES_CHANGED=$(git diff --name-only "$PREV_TAG" HEAD 2>/dev/null | wc -l | tr -d ' ' || true)
+  FILES_CHANGED=$(git diff --name-only "$PREV_TAG" "$RELEASE_REF" 2>/dev/null | wc -l | tr -d ' ' || true)
 fi
 
 # ── Assemble ──────────────────────────────────────────────────────────────────
@@ -94,7 +113,7 @@ PLATFORM_LABEL=$(platform_label)
 LANE_LABEL=$(lane_label)
 EMOJI=$(release_emoji)
 RELEASE_DATE=$(TZ='Asia/Kolkata' date +"%Y-%m-%d %H:%M IST")
-SHORT_SHA="${SHA:0:8}"
+SHORT_SHA="${RELEASE_SHA:0:8}"
 WORKFLOW_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
 RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
 
