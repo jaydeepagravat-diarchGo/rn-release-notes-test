@@ -28,10 +28,10 @@ platform_label() {
 
 lane_label() {
   case "$LANE" in
-    beta)                 echo "Beta" ;;
+    beta)                  echo "Beta" ;;
     promote_to_production) echo "Production (promoted)" ;;
-    production)           echo "Production" ;;
-    *)                    echo "$LANE" ;;
+    production)            echo "Production" ;;
+    *)                     echo "$LANE" ;;
   esac
 }
 
@@ -123,6 +123,7 @@ RELEASE_DATE=$(TZ='Asia/Kolkata' date +"%Y-%m-%d %H:%M IST")
 SHORT_SHA="${RELEASE_SHA:0:8}"
 WORKFLOW_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
 RELEASE_TITLE="${EMOJI} ${PLATFORM_LABEL} Release v${VERSION} (${BUILD})"
+
 RELEASE_BODY="## Release Overview
 
 | Field | Value |
@@ -157,8 +158,7 @@ $([ -n "$FILES_CHANGED" ] && echo "| **Files Changed** | ${FILES_CHANGED} |")
 
 ## Included Commits
 
-${COMMITS_BODY}
-
+${COMMIT_LINES}
 ---
 
 ## Build Information
@@ -168,8 +168,7 @@ ${COMMITS_BODY}
 | **Workflow** | ${WORKFLOW_NAME} |
 | **Run Number** | #${RUN_NUMBER} |
 | **Run URL** | [View run](${WORKFLOW_URL}) |
-| **Triggered By** | @${ACTOR} |
-
+| **Triggered By** | @${ACTOR} |"
 
 # ── Write outputs ─────────────────────────────────────────────────────────────
 
