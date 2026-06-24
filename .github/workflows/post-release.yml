@@ -20,15 +20,22 @@ jobs:
     name: "Post-Release (${{ inputs.platform }})"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      ANDROID_INTERNAL_TESTING_URL: ${{ vars.ANDROID_INTERNAL_TESTING_URL }}
+      ANDROID_PLAY_CONSOLE_URL: ${{ vars.ANDROID_PLAY_CONSOLE_URL }}
+      ANDROID_PLAY_STORE_URL: ${{ vars.ANDROID_PLAY_STORE_URL }}
+      IOS_TESTFLIGHT_URL: ${{ vars.IOS_TESTFLIGHT_URL }}
+      IOS_APP_STORE_CONNECT_URL: ${{ vars.IOS_APP_STORE_CONNECT_URL }}
+      IOS_APP_STORE_URL: ${{ vars.IOS_APP_STORE_URL }}
 
     steps:
       # ----------------------------------------------------------------
       # 1. Checkout (full history so we can walk tags & commits)
       # ----------------------------------------------------------------
-      - name: Checkout main
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: master
           fetch-depth: 0
           token: ${{ github.token }}
 
@@ -97,7 +104,7 @@ jobs:
           PREV_TAG:      ${{ steps.prev.outputs.previous_tag }}
           ACTOR:         ${{ github.actor }}
           SHA:           ${{ github.sha }}
-          BRANCH:        main
+          BRANCH:        master
           RUN_NUMBER:    ${{ github.run_number }}
           RUN_ID:        ${{ github.run_id }}
           REPO:          ${{ github.repository }}

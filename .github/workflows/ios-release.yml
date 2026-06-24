@@ -23,6 +23,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Validate branch
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/master" ]; then
+            echo "❌ This workflow can only run from master"
+            exit 1
+          fi
+
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -67,4 +74,3 @@ jobs:
       lane: ${{ inputs.lane }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      GH_PAT: ${{ secrets.GH_PAT }}

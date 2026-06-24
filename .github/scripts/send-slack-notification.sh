@@ -40,13 +40,13 @@ install_link() {
   # Replace these with your real app IDs / TestFlight token.
   if [[ "$PLATFORM" == "android" ]]; then
     case "$LANE" in
-      beta) echo "https://play.google.com/apps/internaltest/YOUR_ANDROID_APP_ID" ;;
-      *)    echo "https://play.google.com/store/apps/details?id=YOUR_ANDROID_APP_ID" ;;
+      beta) echo ${ANDROID_INTERNAL_TESTING_URL};;
+      *)    echo ${ANDROID_PLAY_STORE_URL} ;;
     esac
   else
     case "$LANE" in
-      beta) echo "https://testflight.apple.com/join/YOUR_TESTFLIGHT_TOKEN" ;;
-      *)    echo "https://apps.apple.com/app/idYOUR_IOS_APP_ID" ;;
+      beta) echo ${IOS_TESTFLIGHT_URL} ;;
+      *)    echo ${IOS_APP_STORE_URL} ;;
     esac
   fi
 }

@@ -56,21 +56,21 @@ dist_section() {
   if [[ "$PLATFORM" == "android" ]]; then
     case "$LANE" in
       beta)
-        lines+="* 🧪 **Internal Testing:** https://play.google.com/apps/internaltest/4701465847560328530"$'\n'
-        lines+="* 🔗 **Play Console:** https://play.google.com/console/u/0/developers/5954935899608654188/app/4976344022028616551/tracks/internal-testing"$'\n'
+        lines+="* 🧪 **Internal Testing:** ${ANDROID_INTERNAL_TESTING_URL}"$'\n'
+        lines+="* 🔗 **Play Console:** ${ANDROID_PLAY_CONSOLE_URL}"$'\n'
         ;;
       promote_to_production|production)
-        lines+="* 🛍️ **Play Store:** https://play.google.com/store/apps/details?id=com.diarchgouser"$'\n'
+        lines+="* 🛍️ **Play Store:** ${ANDROID_PLAY_STORE_URL}"$'\n'
         ;;
     esac
   else
     case "$LANE" in
       beta)
-        lines+="* 🧪 **TestFlight:** https://testflight.apple.com/join/YOUR_TESTFLIGHT_TOKEN"$'\n'
-        lines+="* 🔗 **App Store Connect:** https://appstoreconnect.apple.com/apps/YOUR_APP_ID/testflight/ios"$'\n'
+        lines+="* 🧪 **TestFlight:** ${IOS_TESTFLIGHT_URL}"$'\n'
+        lines+="* 🔗 **App Store Connect:** ${IOS_APP_STORE_CONNECT_URL}"$'\n'
         ;;
       promote_to_production|production)
-        lines+="* 🛍️ **App Store:** https://apps.apple.com/us/app/diarchgo/id6753003161"$'\n'
+        lines+="* 🛍️ **App Store:** ${IOS_APP_STORE_URL}"$'\n'
         ;;
     esac
   fi
@@ -111,7 +111,7 @@ CONTRIBUTOR_COUNT=$(echo "$CONTRIBUTORS_RAW" | sort -u | grep -c . || true)
 # Attempt files-changed count (best effort — skip if slow/unavailable)
 FILES_CHANGED=""
 if [[ -n "$PREV_TAG" ]] && git rev-parse "$PREV_TAG" &>/dev/null; then
-  FILES_CHANGED=$(git diff --name-only "$PREV_TAG" HEAD 2>/dev/null | wc -l | tr -d ' ' || true)
+  FILES_CHANGED=$(git diff --name-only "$PREV_TAG" "$RELEASE_REF" 2>/dev/null | wc -l | tr -d ' ' || true)
 fi
 
 # ── Assemble release notes ────────────────────────────────────────────────────
