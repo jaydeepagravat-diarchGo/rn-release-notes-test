@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
 # .github/scripts/send-slack-notification.sh
-#
-# Sends a Slack Block Kit notification via Incoming Webhook.
-# Failures are non-fatal — a Slack blip must never block a release.
-#
-# Required env vars:
-#   SLACK_WEBHOOK_URL, PLATFORM, LANE, TAG, VERSION, BUILD
-#   ACTOR, COMMIT_COUNT, RELEASE_URL, RUN_ID, REPO
 
 set -euo pipefail
 
@@ -37,16 +30,15 @@ release_type_label() {
 }
 
 install_link() {
-  # Replace these with your real app IDs / TestFlight token.
   if [[ "$PLATFORM" == "android" ]]; then
     case "$LANE" in
-      beta) echo ${ANDROID_INTERNAL_TESTING_URL};;
-      *)    echo ${ANDROID_PLAY_STORE_URL} ;;
+      beta) echo "${ANDROID_INTERNAL_TESTING_URL}" ;;
+      *)    echo "${ANDROID_PLAY_STORE_URL}" ;;
     esac
   else
     case "$LANE" in
-      beta) echo ${IOS_TESTFLIGHT_URL} ;;
-      *)    echo ${IOS_APP_STORE_URL} ;;
+      beta) echo "${IOS_TESTFLIGHT_URL}" ;;
+      *)    echo "${IOS_APP_STORE_URL}" ;;
     esac
   fi
 }
@@ -58,6 +50,22 @@ RELEASE_TYPE=$(release_type_label)
 INSTALL_URL=$(install_link)
 WORKFLOW_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
 RELEASE_DATE=$(TZ='Asia/Kolkata' date +"%Y-%m-%d %H:%M IST")
+
+# ── Debug ─────────────────────────────────────────────────────────────────────
+
+echo "=== DEBUG VALUES ==="
+echo "PLATFORM_LABEL : '$PLATFORM_LABEL'"
+echo "RELEASE_TYPE   : '$RELEASE_TYPE'"
+echo "INSTALL_URL    : '$INSTALL_URL'"
+echo "WORKFLOW_URL   : '$WORKFLOW_URL'"
+echo "RELEASE_DATE   : '$RELEASE_DATE'"
+echo "VERSION        : '$VERSION'"
+echo "BUILD          : '$BUILD'"
+echo "TAG            : '$TAG'"
+echo "COMMIT_COUNT   : '$COMMIT_COUNT'"
+echo "ACTOR          : '$ACTOR'"
+echo "RELEASE_URL    : '$RELEASE_URL'"
+echo "===================="
 
 # ── Payload ───────────────────────────────────────────────────────────────────
 
@@ -111,6 +119,16 @@ PAYLOAD=$(cat <<SLACK_EOF
 SLACK_EOF
 )
 
+# ── Validate JSON ─────────────────────────────────────────────────────────────
+
+echo "=== DEBUG PAYLOAD ==="
+echo "$PAYLOAD"
+echo "===================="
+
+echo "=== JSON VALIDATION ==="
+echo "$PAYLOAD" | python3 -m json.tool && echo "✅ JSON is valid" || echo "❌ JSON is invalid"
+echo "===================="
+
 # ── Send ──────────────────────────────────────────────────────────────────────
 
 HTTP_STATUS=$(curl -s -o /tmp/slack-response.txt -w "%{http_code}" \
@@ -124,6 +142,5 @@ BODY=$(cat /tmp/slack-response.txt)
 if [[ "$HTTP_STATUS" == "200" ]]; then
   echo "✅ Slack notification sent."
 else
-  # Non-fatal — log and continue
   echo "⚠️  Slack notification failed. HTTP $HTTP_STATUS — $BODY"
 fi
