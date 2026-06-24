@@ -67,4 +67,3 @@ jobs:
       lane: ${{ inputs.lane }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      GH_PAT: ${{ secrets.GH_PAT }}
